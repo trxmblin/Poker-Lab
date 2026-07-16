@@ -1466,6 +1466,8 @@ input.addEventListener("keydown", e=>{ if(e.key==="Enter") ask(input.value); });
 "use strict";
 /* ================= EXCEL REPORT ================= */
 (function(){
+const btn = document.getElementById("xlReport");
+if(!btn) return;
 
 function group(ss,key){ const m={}; ss.forEach(s=>{ const k=key(s)||"—"; (m[k]=m[k]||[]).push(s); }); return m; }
 function agg(list){
@@ -1576,6 +1578,7 @@ function svgToPng(svg){
 function buildWorkbook(ExcelJS, obs, images){
   const wb = new ExcelJS.Workbook();
   wb.creator="Poker Lab"; wb.created=new Date();
+  wb.calcProperties.fullCalcOnLoad = true;
   const ss=sorted(); const n=ss.length+1;
   const GOLD={argb:"FFD9B23A"}, DK={argb:"FF1F2228"}, WT={argb:"FFFFFFFF"};
   const money='$#,##0;($#,##0);-';
@@ -1588,13 +1591,15 @@ function buildWorkbook(ExcelJS, obs, images){
   const bw = wb.addWorksheet("Breakdowns");
   const sh = wb.addWorksheet("Sessions");
   head(sh,1,["Date","Venue","Format","Buy-in ($)","Rebuys ($)","Cash out ($)","Field","Finish","Hours","Net ($)","Cumulative ($)","$/hr","ITM","Month"]);
+  let runCum=0;
   ss.forEach((s,idx)=>{ const r=idx+2, row=sh.getRow(r);
+    const d=derive(s); runCum+=d.net;
     row.values=[s.date,s.venue,s.format,+s.buyin||0,+s.rebuys||0,+s.cashout||0,s.field?+s.field:null,s.finish?+s.finish:null,+s.hours||0];
-    row.getCell(10).value={formula:"F"+r+"-D"+r+"-E"+r};
-    row.getCell(11).value={formula: r===2? "J2" : "K"+(r-1)+"+J"+r};
-    row.getCell(12).value={formula:"IF(I"+r+">0,J"+r+"/I"+r+",0)"};
-    row.getCell(13).value={formula:'IF(ISNUMBER(G'+r+'),IF(F'+r+'>0,1,0),"")'};
-    row.getCell(14).value={formula:"LEFT(A"+r+",7)"};
+    row.getCell(10).value={formula:"F"+r+"-D"+r+"-E"+r, result:d.net};
+    row.getCell(11).value={formula: r===2? "J2" : "K"+(r-1)+"+J"+r, result:runCum};
+    row.getCell(12).value={formula:"IF(I"+r+">0,J"+r+"/I"+r+",0)", result:+s.hours>0? d.net/(+s.hours):0};
+    row.getCell(13).value={formula:'IF(ISNUMBER(G'+r+'),IF(F'+r+'>0,1,0),"")', result: s.field? ((+s.cashout||0)>0?1:0) : ""};
+    row.getCell(14).value={formula:"LEFT(A"+r+",7)", result:(s.date||"").slice(0,7)};
     row.eachCell(c=>c.font={name:"Arial",size:10});
     [4,5,6,10,11,12].forEach(ci=>row.getCell(ci).numFmt=money);
   });
@@ -1605,23 +1610,25 @@ function buildWorkbook(ExcelJS, obs, images){
   sm.getCell("A2").value="Generated "+new Date().toLocaleString()+" · all figures live formulas over the Sessions sheet";
   sm.getCell("A2").font={name:"Arial",size:9,italic:true,color:{argb:"FF888888"}};
   head(sm,4,["Metric","Value"]);
+  const t=totals();
+  const mttList=ss.filter(s=>s.field), mttItm=mttList.filter(s=>(+s.cashout||0)>0).length;
   const stats=[
-    ["Sessions","COUNTA(Sessions!A2:A"+n+")","0"],
-    ["Total invested","SUM(Sessions!D2:E"+n+")",money],
-    ["Total cashed","SUM(Sessions!F2:F"+n+")",money],
-    ["Net profit","SUM(Sessions!J2:J"+n+")",money],
-    ["ROI","IF(SUM(Sessions!D2:E"+n+")>0,SUM(Sessions!J2:J"+n+")/SUM(Sessions!D2:E"+n+"),0)","0.0%"],
-    ["Hours played","SUM(Sessions!I2:I"+n+")","0.0"],
-    ["Hourly rate","IF(SUM(Sessions!I2:I"+n+")>0,SUM(Sessions!J2:J"+n+")/SUM(Sessions!I2:I"+n+"),0)",'$#,##0.00;($#,##0.00)'],
-    ["Tournaments","COUNT(Sessions!G2:G"+n+")","0"],
-    ["ITM rate (MTT)","IF(COUNT(Sessions!G2:G"+n+")>0,SUM(Sessions!M2:M"+n+")/COUNT(Sessions!G2:G"+n+"),0)","0.0%"],
-    ["Wins (1st)","COUNTIF(Sessions!H2:H"+n+",1)","0"],
-    ["Best session","MAX(Sessions!J2:J"+n+")",money],
-    ["Worst session","MIN(Sessions!J2:J"+n+")",money]
+    ["Sessions","COUNTA(Sessions!A2:A"+n+")","0", t.n],
+    ["Total invested","SUM(Sessions!D2:E"+n+")",money, t.cost],
+    ["Total cashed","SUM(Sessions!F2:F"+n+")",money, t.cash],
+    ["Net profit","SUM(Sessions!J2:J"+n+")",money, t.net],
+    ["ROI","IF(SUM(Sessions!D2:E"+n+")>0,SUM(Sessions!J2:J"+n+")/SUM(Sessions!D2:E"+n+"),0)","0.0%", t.roi||0],
+    ["Hours played","SUM(Sessions!I2:I"+n+")","0.0", t.hrs],
+    ["Hourly rate","IF(SUM(Sessions!I2:I"+n+")>0,SUM(Sessions!J2:J"+n+")/SUM(Sessions!I2:I"+n+"),0)",'$#,##0.00;($#,##0.00)', t.hourly||0],
+    ["Tournaments","COUNT(Sessions!G2:G"+n+")","0", mttList.length],
+    ["ITM rate (MTT)","IF(COUNT(Sessions!G2:G"+n+")>0,SUM(Sessions!M2:M"+n+")/COUNT(Sessions!G2:G"+n+"),0)","0.0%", mttList.length? mttItm/mttList.length:0],
+    ["Wins (1st)","COUNTIF(Sessions!H2:H"+n+",1)","0", ss.filter(s=>+s.finish===1).length],
+    ["Best session","MAX(Sessions!J2:J"+n+")",money, t.best||0],
+    ["Worst session","MIN(Sessions!J2:J"+n+")",money, t.worst||0]
   ];
   stats.forEach((s,i)=>{ const r=5+i;
     sm.getCell("A"+r).value=s[0]; sm.getCell("A"+r).font={name:"Arial",size:10};
-    const c=sm.getCell("B"+r); c.value={formula:s[1]}; c.numFmt=s[2]; c.font={name:"Arial",size:10,bold:true};
+    const c=sm.getCell("B"+r); c.value={formula:s[1], result:s[3]}; c.numFmt=s[2]; c.font={name:"Arial",size:10,bold:true};
   });
   sm.getColumn(1).width=20; sm.getColumn(2).width=14;
 
@@ -1635,16 +1642,17 @@ function buildWorkbook(ExcelJS, obs, images){
   iw.getColumn(1).width=115;
 
   let r0=1;
-  const table=(label,keyCol,keys)=>{
+  const table=(label,keyCol,keys,keyFn)=>{
     bw.getCell(r0,1).value=label; bw.getCell(r0,1).font={name:"Arial",bold:true,size:12}; r0++;
     head(bw,r0,["","Sessions","Net ($)","ROI","$/hr"]); r0++;
     keys.forEach(k=>{
       const rng="Sessions!"+keyCol+"2:"+keyCol+n;
+      const a=agg(ss.filter(s=>keyFn(s)===k));
       bw.getCell(r0,1).value=k; bw.getCell(r0,1).font={name:"Arial",size:10};
-      bw.getCell(r0,2).value={formula:'COUNTIF('+rng+',A'+r0+')'};
-      bw.getCell(r0,3).value={formula:'SUMIF('+rng+',A'+r0+',Sessions!J2:J'+n+')'};
-      bw.getCell(r0,4).value={formula:'IF(SUMIF('+rng+',A'+r0+',Sessions!D2:D'+n+')+SUMIF('+rng+',A'+r0+',Sessions!E2:E'+n+')>0,C'+r0+'/(SUMIF('+rng+',A'+r0+',Sessions!D2:D'+n+')+SUMIF('+rng+',A'+r0+',Sessions!E2:E'+n+')),0)'};
-      bw.getCell(r0,5).value={formula:'IF(SUMIF('+rng+',A'+r0+',Sessions!I2:I'+n+')>0,C'+r0+'/SUMIF('+rng+',A'+r0+',Sessions!I2:I'+n+'),0)'};
+      bw.getCell(r0,2).value={formula:'COUNTIF('+rng+',A'+r0+')', result:a.n};
+      bw.getCell(r0,3).value={formula:'SUMIF('+rng+',A'+r0+',Sessions!J2:J'+n+')', result:a.net};
+      bw.getCell(r0,4).value={formula:'IF(SUMIF('+rng+',A'+r0+',Sessions!D2:D'+n+')+SUMIF('+rng+',A'+r0+',Sessions!E2:E'+n+')>0,C'+r0+'/(SUMIF('+rng+',A'+r0+',Sessions!D2:D'+n+')+SUMIF('+rng+',A'+r0+',Sessions!E2:E'+n+')),0)', result:a.roi};
+      bw.getCell(r0,5).value={formula:'IF(SUMIF('+rng+',A'+r0+',Sessions!I2:I'+n+')>0,C'+r0+'/SUMIF('+rng+',A'+r0+',Sessions!I2:I'+n+'),0)', result:a.hourly};
       bw.getCell(r0,3).numFmt=money; bw.getCell(r0,4).numFmt="0.0%"; bw.getCell(r0,5).numFmt='$#,##0.00;($#,##0.00)';
       for(let c=2;c<=5;c++) bw.getCell(r0,c).font={name:"Arial",size:10};
       r0++;
@@ -1652,9 +1660,10 @@ function buildWorkbook(ExcelJS, obs, images){
     r0+=2;
   };
   const uniq=f=>[...new Set(ss.map(f).filter(Boolean))];
-  table("By format","C",uniq(s=>s.format));
-  table("By venue","B",uniq(s=>s.venue).sort());
-  table("By month","N",uniq(s=>(s.date||"").slice(0,7)).sort());
+  const fmtKey=s=>s.format, venKey=s=>s.venue, monKey=s=>(s.date||"").slice(0,7);
+  table("By format","C",uniq(fmtKey),fmtKey);
+  table("By venue","B",uniq(venKey).sort(),venKey);
+  table("By month","N",uniq(monKey).sort(),monKey);
   bw.getColumn(1).width=18; [10,11,8,10].forEach((w,i)=>bw.getColumn(i+2).width=w);
 
   if(images.length){
@@ -1668,9 +1677,7 @@ function buildWorkbook(ExcelJS, obs, images){
 
 async function makeReport(){
   if(!S.sessions.length){ toast("Log some sessions first — nothing to report yet."); return; }
-  const btn = document.getElementById("xlReport");
-  const vEl = btn? btn.querySelector(".v") : null;
-  if(btn){ btn.style.pointerEvents="none"; if(vEl) vEl.textContent="Building…"; }
+  btn.disabled=true; const old=btn.textContent; btn.textContent="Building report…";
   try{
     if(!window.ExcelJS) await new Promise((res,rej)=>{ const t=document.createElement("script");
       t.src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
@@ -1696,13 +1703,9 @@ async function makeReport(){
     setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },4000);
     toast("Report downloaded — "+S.sessions.length+" sessions analysed.");
   }catch(err){ toast(err.message||"Report failed — try again."); }
-  finally{ if(btn){ btn.style.pointerEvents=""; if(vEl) vEl.innerHTML="Download &#8595;"; } }
+  finally{ btn.disabled=false; btn.textContent=old; }
 }
-let busy=false;
-document.addEventListener("click", async e=>{
-  if(!e.target.closest("#xlReport") || busy) return;
-  busy=true; try{ await makeReport(); } finally{ busy=false; }
-});
+btn.addEventListener("click", makeReport);
 })();
 
 </script>
