@@ -140,11 +140,7 @@ details details summary{font-size:13px;padding:9px 12px}
 <section class="tab active" id="tab-dash">
   <div class="cards" id="statCards"></div>
   <div class="panel">
-    <h2>Cumulative profit</h2>
-    <div class="chartwrap" id="profitChart"><div class="empty">Log sessions to see your profit curve.</div></div>
-  </div>
-  <div class="panel">
-    <h2>Last 15 sessions</h2>
+    <h2>Last 15 sessions &middot; result per session</h2>
     <div class="chartwrap" id="barChart"><div class="empty">Nothing yet.</div></div>
   </div>
 </section>
@@ -535,47 +531,32 @@ function renderDash(){
   ];
   $("statCards").innerHTML = cards.map(c=>
     `<div class="card"><div class="k">${c[0]}</div><div class="v ${c[2]}">${c[1]}</div></div>`).join("");
-  renderProfitChart();
   renderBarChart();
-}
-function renderProfitChart(){
-  const el = $("profitChart");
-  const ss = sorted();
-  if(ss.length<2){ el.innerHTML = '<div class="empty">Log at least two sessions to see your profit curve.</div>'; return; }
-  let cum=0; const pts = ss.map(s=>{ cum+=derive(s).net; return cum; });
-  const W=Math.max(560, ss.length*28), H=220, P=42;
-  const min=Math.min(0,...pts), max=Math.max(0,...pts), span=(max-min)||1;
-  const X=i=> P + i*(W-P-14)/(pts.length-1);
-  const Y=v=> H-28 - (v-min)*(H-28-14)/span;
-  let path=""; pts.forEach((v,i)=>{ path += (i?"L":"M")+X(i).toFixed(1)+","+Y(v).toFixed(1); });
-  const zero = Y(0);
-  const last = pts[pts.length-1];
-  el.innerHTML =
-   `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-      <line x1="${P}" y1="${zero}" x2="${W-14}" y2="${zero}" stroke="#3b3f48" stroke-dasharray="4 4"/>
-      <path d="${path}" fill="none" stroke="${last>=0?'#3ecf6e':'#e15b5b'}" stroke-width="2.5"/>
-      ${pts.map((v,i)=>`<circle cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="3" fill="${v>=0?'#3ecf6e':'#e15b5b'}"><title>${ss[i].date}: ${fmt$(v)} cumulative</title></circle>`).join("")}
-      <text x="${P}" y="${zero-6}" fill="#9aa1ad" font-size="11">$0</text>
-      <text x="${W-14}" y="${Y(last)-8}" fill="${last>=0?'#3ecf6e':'#e15b5b'}" font-size="12" text-anchor="end" font-weight="700">${fmt$(last)}</text>
-    </svg>`;
 }
 function renderBarChart(){
   const el = $("barChart");
   const ss = sorted().slice(-15);
   if(!ss.length){ el.innerHTML = '<div class="empty">Nothing yet.</div>'; return; }
   const nets = ss.map(s=>derive(s).net);
-  const W=Math.max(560, ss.length*38), H=200;
+  const W=640, H=280, PL=16, PR=16, PT=34, PB=34;
   const maxAbs = Math.max(...nets.map(Math.abs), 1);
-  const zero = H/2;
-  const bw = Math.min(26, (W-60)/ss.length - 8);
+  const X = i => ss.length===1 ? W/2 : PL + i*(W-PL-PR)/(ss.length-1);
+  const Y = v => PT + (H-PT-PB)/2 - v/maxAbs*(H-PT-PB)/2;
+  const zero = Y(0);
+  let path=""; nets.forEach((v,i)=>{ path += (i?"L":"M")+X(i).toFixed(1)+","+Y(v).toFixed(1); });
   el.innerHTML =
-   `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-      <line x1="30" y1="${zero}" x2="${W-10}" y2="${zero}" stroke="#3b3f48"/>
+   `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet">
+      <line x1="${PL}" y1="${zero}" x2="${W-PR}" y2="${zero}" stroke="#3b3f48" stroke-dasharray="4 4"/>
+      <text x="${PL}" y="${zero-5}" fill="#9aa1ad" font-size="11">$0</text>
+      ${ss.length>1 ? `<path d="${path}" fill="none" stroke="#d9b23a" stroke-width="2" stroke-linejoin="round"/>` : ""}
       ${nets.map((v,i)=>{
-        const h = Math.abs(v)/maxAbs*(H/2-24);
-        const x = 40 + i*((W-60)/ss.length);
-        const y = v>=0? zero-h : zero;
-        return `<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(h,1)}" rx="3" fill="${v>=0?'#3ecf6e':'#e15b5b'}"><title>${ss[i].date}: ${fmt$(v)}</title></rect>`;
+        const cx=X(i).toFixed(1), cy=Y(v).toFixed(1);
+        const up = v>=0;
+        const stag = i%2 ? 13 : 0; /* stagger alternate labels so neighbours don't overlap */
+        const ty = up ? Y(v)-10-stag : Y(v)+18+stag;
+        const anchor = i===0 ? "start" : i===ss.length-1 ? "end" : "middle";
+        return `<circle cx="${cx}" cy="${cy}" r="4.5" fill="${up?'#3ecf6e':'#e15b5b'}"><title>${ss[i].date}: ${fmt$(v)}</title></circle>
+          <text x="${cx}" y="${ty.toFixed(1)}" fill="${up?'#3ecf6e':'#e15b5b'}" font-size="13" font-weight="700" text-anchor="${anchor}">${fmt$(v)}</text>`;
       }).join("")}
     </svg>`;
 }
