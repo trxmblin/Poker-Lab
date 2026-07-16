@@ -1550,8 +1550,10 @@ async function syncNow(silent){
 let syTimer = null;
 window.pkSyncQueue = function(){
   if(!SY.token || SY.auto==="0") return;
+  if(syncing) return; /* saves made while merging remote data must NOT re-queue a sync — this caused an infinite sync loop */
+  const wait = Math.max(4000, (SY.last||0) + 30000 - Date.now()); /* auto-syncs at most every 30s */
   clearTimeout(syTimer);
-  syTimer = setTimeout(()=>syncNow(true), 4000);
+  syTimer = setTimeout(()=>syncNow(true), wait);
 };
 /* UI */
 $s("sy_token").value = SY.token||"";
