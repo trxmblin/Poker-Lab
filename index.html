@@ -152,8 +152,13 @@ label.tdone input{width:auto;accent-color:var(--gold)}
 
 <!-- DASHBOARD -->
 <section class="tab active" id="tab-dash">
-  <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
-    <div style="min-width:180px"><label>Showing</label><select id="dashFilter"></select></div>
+  <div class="pillbar" id="dashPills" style="margin-bottom:14px;align-items:center">
+    <button data-df="all" class="active">All time</button>
+    <button data-df="tm">This month</button>
+    <button data-df="lm">Last month</button>
+    <button data-df="3m">3 months</button>
+    <button data-df="ty">This year</button>
+    <select id="dashMonth" style="width:auto;padding:6px 10px;border-radius:16px;font-size:13px;background:#101115;color:var(--dim)"><option value="">Month…</option></select>
   </div>
   <div class="cards" id="statCards"></div>
   <div class="panel">
@@ -703,22 +708,31 @@ function dashFiltered(){
   return S.sessions;
 }
 function dashFilterRefresh(){
-  const sel=$("dashFilter");
+  const sel=$("dashMonth");
   const months=[...new Set(S.sessions.map(s=>(s.date||"").slice(0,7)).filter(Boolean))].sort().reverse();
-  const opts=[["all","All time"],["tm","This month"],["lm","Last month"],["3m","Last 3 months"],["ty","This year"]];
-  months.forEach(m=>opts.push(["m:"+m, new Date(m+"-15T12:00:00").toLocaleDateString(undefined,{month:"long",year:"numeric"})]));
-  const want=opts.map(o=>o[0]).join("|");
+  const want=months.join("|");
   if(sel.dataset.opts!==want){
-    sel.innerHTML = opts.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join("");
+    sel.innerHTML = '<option value="">Month…</option>' + months.map(m=>'<option value="m:'+m+'">'+new Date(m+"-15T12:00:00").toLocaleDateString(undefined,{month:"short",year:"numeric"})+'</option>').join("");
     sel.dataset.opts=want;
   }
-  if(![...sel.options].some(o=>o.value===dashFilterVal)) dashFilterVal="all";
-  sel.value=dashFilterVal;
+  const isMonth = dashFilterVal.slice(0,2)==="m:";
+  if(isMonth && ![...sel.options].some(o=>o.value===dashFilterVal)) dashFilterVal="all";
+  sel.value = dashFilterVal.slice(0,2)==="m:" ? dashFilterVal : "";
+  sel.style.color = sel.value? "var(--gold)" : "var(--dim)";
+  sel.style.borderColor = sel.value? "var(--gold)" : "var(--line)";
+  document.querySelectorAll("#dashPills button").forEach(b=>b.classList.toggle("active", b.dataset.df===dashFilterVal));
 }
-$("dashFilter").addEventListener("change", ()=>{
-  dashFilterVal=$("dashFilter").value;
-  try{ localStorage.setItem("pokerLabDashFilter", dashFilterVal); }catch(e){}
+function dashSetFilter(v){
+  dashFilterVal=v;
+  try{ localStorage.setItem("pokerLabDashFilter", v); }catch(e){}
   renderDash();
+}
+$("dashPills").addEventListener("click", e=>{
+  const b=e.target.closest("button[data-df]"); if(!b) return;
+  dashSetFilter(b.dataset.df);
+});
+$("dashMonth").addEventListener("change", ()=>{
+  dashSetFilter($("dashMonth").value || "all");
 });
 function renderDash(){
   dashFilterRefresh();
