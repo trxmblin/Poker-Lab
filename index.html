@@ -152,6 +152,9 @@ label.tdone input{width:auto;accent-color:var(--gold)}
 
 <!-- DASHBOARD -->
 <section class="tab active" id="tab-dash">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+    <div style="min-width:180px"><label>Showing</label><select id="dashFilter"></select></div>
+  </div>
   <div class="cards" id="statCards"></div>
   <div class="panel">
     <h2>Last 15 sessions &middot; result per session</h2>
@@ -661,9 +664,10 @@ function derive(x){
   return { cost, net, itm: (+x.cashout||0) > 0, hourly: (+x.hours||0) > 0 ? net/(+x.hours) : null };
 }
 function sorted(){ return [...S.sessions].sort((a,b)=> a.date<b.date?-1 : a.date>b.date?1 : (a.id-b.id)); }
-function totals(){
+function totals(list){
+  const src = list || S.sessions;
   let cost=0, cash=0, net=0, hrs=0, itm=0, wins=0, best=null, worst=null;
-  for(const s of S.sessions){
+  for(const s of src){
     const d = derive(s);
     cost+=d.cost; cash+=(+s.cashout||0); net+=d.net; hrs+=(+s.hours||0);
     if(d.itm) itm++;
@@ -671,7 +675,7 @@ function totals(){
     if(best===null||d.net>best) best=d.net;
     if(worst===null||d.net<worst) worst=d.net;
   }
-  const n = S.sessions.length;
+  const n = src.length;
   return { n, cost, cash, net, hrs, itm, wins, best, worst,
     roi: cost>0? net/cost : null, itmRate: n>0? itm/n : null,
     hourly: hrs>0? net/hrs : null, avgCost: n>0? cost/n : null };
@@ -686,8 +690,40 @@ document.getElementById("nav").addEventListener("click", e=>{
 });
 
 /* ---------- dashboard ---------- */
+let dashFilterVal = localStorage.getItem("pokerLabDashFilter") || "all";
+function dashFiltered(){
+  const v = dashFilterVal, now = new Date();
+  const ym = d => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+  if(v==="all") return S.sessions;
+  if(v==="tm") return S.sessions.filter(s=>(s.date||"").slice(0,7)===ym(now));
+  if(v==="lm"){ const lm=ym(new Date(now.getFullYear(), now.getMonth()-1, 15)); return S.sessions.filter(s=>(s.date||"").slice(0,7)===lm); }
+  if(v==="3m"){ const c=new Date(now.getFullYear(), now.getMonth()-3, now.getDate()); const iso=ym(c)+"-"+String(c.getDate()).padStart(2,"0"); return S.sessions.filter(s=>(s.date||"")>=iso); }
+  if(v==="ty") return S.sessions.filter(s=>(s.date||"").slice(0,4)===String(now.getFullYear()));
+  if(v.slice(0,2)==="m:") return S.sessions.filter(s=>(s.date||"").slice(0,7)===v.slice(2));
+  return S.sessions;
+}
+function dashFilterRefresh(){
+  const sel=$("dashFilter");
+  const months=[...new Set(S.sessions.map(s=>(s.date||"").slice(0,7)).filter(Boolean))].sort().reverse();
+  const opts=[["all","All time"],["tm","This month"],["lm","Last month"],["3m","Last 3 months"],["ty","This year"]];
+  months.forEach(m=>opts.push(["m:"+m, new Date(m+"-15T12:00:00").toLocaleDateString(undefined,{month:"long",year:"numeric"})]));
+  const want=opts.map(o=>o[0]).join("|");
+  if(sel.dataset.opts!==want){
+    sel.innerHTML = opts.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join("");
+    sel.dataset.opts=want;
+  }
+  if(![...sel.options].some(o=>o.value===dashFilterVal)) dashFilterVal="all";
+  sel.value=dashFilterVal;
+}
+$("dashFilter").addEventListener("change", ()=>{
+  dashFilterVal=$("dashFilter").value;
+  try{ localStorage.setItem("pokerLabDashFilter", dashFilterVal); }catch(e){}
+  renderDash();
+});
 function renderDash(){
-  const t = totals();
+  dashFilterRefresh();
+  const fl = dashFiltered();
+  const t = totals(fl);
   const cards = [
     ["Sessions", t.n, ""],
     ["Net profit", t.n? fmt$(t.net):"—", t.net>0?"pos":t.net<0?"neg":""],
@@ -705,6 +741,7 @@ function renderDash(){
   let p3=0, n3=0;
   S.sessions.forEach(s=>{ if((s.date||"")>=cutIso){ p3+=derive(s).net; n3++; } });
   cards.push(["Last 3 months P/L", n3? fmt$(p3):"—", p3>0?"pos":p3<0?"neg":""]);
+  window.dashChartList = fl;
   $("statCards").innerHTML = cards.map(c=>
     `<div class="card"><div class="k">${c[0]}</div><div class="v ${c[2]}">${c[1]}</div></div>`).join("") +
     `<div class="card click" id="xlReport" role="button" title="Download a full Excel report"><div class="k">Excel report</div><div class="v gold">Download &#8595;</div></div>`;
@@ -712,7 +749,8 @@ function renderDash(){
 }
 function renderBarChart(){
   const el = $("barChart");
-  const ss = sorted().slice(-15);
+  const base = window.dashChartList || S.sessions;
+  const ss = [...base].sort((a,b)=> a.date<b.date?-1 : a.date>b.date?1 : (a.id-b.id)).slice(-15);
   if(!ss.length){ el.innerHTML = '<div class="empty">Nothing yet.</div>'; return; }
   const nets = ss.map(s=>derive(s).net);
   const W=640, H=280, PL=16, PR=16, PT=34, PB=34;
