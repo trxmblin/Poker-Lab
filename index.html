@@ -39,7 +39,8 @@ main{max-width:1100px;margin:0 auto;padding:20px 24px 60px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 @media(max-width:800px){.grid2{grid-template-columns:1fr}}
 label{display:block;font-size:12px;color:var(--dim);margin:10px 0 4px}
-input,select,textarea{width:100%;background:#101115;border:1px solid var(--line);border-radius:6px;color:var(--text);padding:8px 10px;font-size:14px;font-family:inherit}
+input,select,textarea{width:100%;min-width:0;background:#101115;border:1px solid var(--line);border-radius:6px;color:var(--text);padding:8px 10px;font-size:14px;font-family:inherit}
+input[type="date"]{-webkit-appearance:none;appearance:none;display:block;min-height:37px;text-align:left}
 textarea{resize:vertical;min-height:70px}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold)}
 .btn{background:var(--gold);color:#1a1a10;border:none;border-radius:7px;padding:10px 18px;font-weight:700;font-size:14px;cursor:pointer;margin-top:14px}
@@ -94,9 +95,9 @@ details .body b{color:var(--text)}
 a{color:var(--gold2)}
 details details{margin:8px 0;background:#17181d}
 details details summary{font-size:13px;padding:9px 12px}
-#pkChatBtn{position:fixed;top:14px;right:18px;z-index:90;width:40px;height:40px;border-radius:50%;background:var(--gold);border:none;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center}
+#pkChatBtn{position:fixed;top:auto;bottom:calc(16px + env(safe-area-inset-bottom));right:18px;z-index:90;width:40px;height:40px;border-radius:50%;background:var(--gold);border:none;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center}
 #pkChatBtn:hover{background:var(--gold2)}
-#pkChat{position:fixed;top:62px;right:18px;z-index:95;width:min(370px,calc(100vw - 36px));max-height:min(540px,calc(100vh - 90px));background:var(--panel);border:1px solid var(--line);border-radius:12px;display:none;flex-direction:column;box-shadow:0 8px 30px rgba(0,0,0,.6)}
+#pkChat{position:fixed;top:auto;bottom:calc(66px + env(safe-area-inset-bottom));right:18px;z-index:95;width:min(370px,calc(100vw - 36px));max-height:min(540px,calc(100vh - 120px));background:var(--panel);border:1px solid var(--line);border-radius:12px;display:none;flex-direction:column;box-shadow:0 8px 30px rgba(0,0,0,.6)}
 #pkChat.open{display:flex}
 #pkChatHead{padding:12px 14px;font-weight:700;color:var(--gold2);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
 #pkChatClose{cursor:pointer;color:var(--dim);font-weight:400}
@@ -618,9 +619,11 @@ label.tdone input{width:auto;accent-color:var(--gold)}
       <div><label>Finish position</label><input type="number" id="lm_finish" min="0" step="1" placeholder="12"></div>
     </div>
     <div><label>Notes (key hands, reads, one lesson)</label><textarea id="lm_notes" placeholder="Mark 3&ndash;5 hands for review while you still remember them&hellip;"></textarea></div>
-    <button class="btn" id="lmSave">Save session</button>
-    <button class="btn ghost small" id="lmMic" style="margin-left:8px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg> Speak the results</button>
-    <button class="btn ghost small" id="lmLater" style="margin-left:8px">Later &mdash; keep it in the form</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-top:14px">
+      <button class="btn" id="lmSave" style="margin:0;flex:1 1 auto">Save session</button>
+      <button class="btn ghost" id="lmMic" style="margin:0;flex:1 1 auto;font-size:13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg> Speak the results</button>
+      <button class="btn ghost" id="lmLater" style="margin:0;flex:1 1 auto;font-size:13px">Later</button>
+    </div>
     <div class="solverstatus" id="lmStatus"></div>
   </div>
 </div>
@@ -1274,7 +1277,7 @@ function parseSpokenSession(t){
   return out;
 }
 let lmRec=null;
-function lmMicIdle(){ $("lmMic").innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg> Speak the results'; lmRec=null; }
+function lmMicIdle(){ $("lmMic").innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg> Speak the results'; lmRec=null; }
 $("lmMic").addEventListener("click", ()=>{
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SR){ $("lmStatus").textContent = "This browser has no speech support — tap a field and use your keyboard's mic instead."; return; }
