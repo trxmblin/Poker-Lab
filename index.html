@@ -583,7 +583,8 @@ label.tdone input{width:auto;accent-color:var(--gold)}
       <h2>Drill &middot; jam or fold reps</h2>
       <div class="note" style="margin:0 0 10px">Random short-stack spots graded against the Nash solution. Commit to your answer before you see the verdict &mdash; that's the whole point. Aim for 80%+ over 50 hands.</div>
       <div class="cards" id="drillScore"></div>
-      <div class="formrow" style="max-width:260px">
+      <div class="formrow" style="max-width:460px">
+        <div><label>Spot types</label><select id="drillSpots"><option value="all" selected>All spots mixed</option><option value="bvb">Blind vs blind only</option><option value="open">Open jams only</option></select></div>
         <div><label>Antes in dealt spots</label><select id="drillAnte"><option value="none" selected>Off — no antes</option><option value="bb">On — BB ante</option><option value="mix">Mix it up</option></select></div>
       </div>
       <div style="text-align:center;padding:18px 0 6px">
@@ -1927,33 +1928,68 @@ $("drillDeal").addEventListener("click", ()=>{
   const ar=Math.random();
   const anteSel = mode==="mix" ? (ar<0.45? "bb" : ar<0.8? "none" : "0.125") : mode;
   const AM = anteModel(anteSel);
-  const seat=Math.random()<0.5? "sb" : "bb";
+  const sm = $("drillSpots").value;
+  let seat;
+  if(sm==="open") seat="open";
+  else if(sm==="bvb") seat = Math.random()<0.5? "sb":"bb";
+  else { const sr=Math.random(); seat = sr<0.34? "sb" : sr<0.67? "bb" : "open"; }
   let pick=Math.random()*1326, idx=168;
   for(let i=0;i<169;i++){ pick-=NCOMBOS[i]; if(pick<=0){ idx=i; break; } }
   $("drillStatus").textContent="Solving spot…"; $("drillVerdict").textContent="";
   setTimeout(()=>{
-    const key=stack+"|"+anteSel;
-    drillSol = drillCache[key] || (drillCache[key]=nashHU(stack,AM.sb,AM.bb));
     const anteTxt = anteSel==="bb"? ", BB ante" : anteSel==="none"? "" : ", "+anteSel+"bb classic antes";
-    drillCur={stack,anteTxt,seat,idx};
-    $("drillDesc").textContent = seat==="sb"
-      ? "You're the SB, "+stack+"bb effective"+anteTxt+". Jam or fold?"
-      : "You're the BB, "+stack+"bb effective"+anteTxt+". The SB jams. Call or fold?";
+    if(seat==="open"){
+      const behind = 1+Math.floor(Math.random()*6);
+      const callPct = [10,12,15][Math.floor(Math.random()*3)];
+      const pot = 1.5 + AM.dead(9);
+      const R = topPctSet(callPct);
+      const base=idx*169;
+      let wTot=0,wCall=0,eqS=0;
+      for(let b=0;b<169;b++){ const w=W[base+b]; wTot+=w; if(R[b]){ wCall+=w; eqS+=w*EQ[base+b]; } }
+      const pC1=wCall/wTot, eqC=wCall>1e-9? eqS/wCall:0.5;
+      const allFold=Math.pow(1-pC1, behind);
+      const ev = allFold*pot + (1-allFold)*(eqC*(2*stack+pot)-stack);
+      drillCur={stack,anteTxt,seat,idx,ev,behind,callPct};
+      $("drillDesc").textContent = "Folds to you, "+stack+"bb effective"+anteTxt+", "+behind+" player"+(behind>1?"s":"")+" still behind who call a jam with the top "+callPct+"%. Jam or fold?";
+    } else {
+      const key=stack+"|"+anteSel;
+      drillSol = drillCache[key] || (drillCache[key]=nashHU(stack,AM.sb,AM.bb));
+      drillCur={stack,anteTxt,seat,idx};
+      $("drillDesc").textContent = seat==="sb"
+        ? "You're the SB, "+stack+"bb effective"+anteTxt+". Jam or fold?"
+        : "You're the BB, "+stack+"bb effective"+anteTxt+". The SB jams. Call or fold?";
+    }
     $("drillHand").textContent = className(CLASSES[idx]);
-    document.querySelector('#drillAns button[data-a="jam"]').textContent = seat==="sb"? "Jam" : "Call";
+    document.querySelector('#drillAns button[data-a="jam"]').textContent = seat==="bb"? "Call" : "Jam";
     $("drillStatus").textContent="";
     drillButtons(true);
   }, 30);
 });
 try{ const saved=localStorage.getItem("pokerLabDrillAnte"); if(saved) $("drillAnte").value=saved; }catch(e){}
 $("drillAnte").addEventListener("change", ()=>{ try{ localStorage.setItem("pokerLabDrillAnte", $("drillAnte").value); }catch(e){} });
+try{ const savedS=localStorage.getItem("pokerLabDrillSpots"); if(savedS) $("drillSpots").value=savedS; }catch(e){}
+$("drillSpots").addEventListener("change", ()=>{ try{ localStorage.setItem("pokerLabDrillSpots", $("drillSpots").value); }catch(e){} });
 $("drillAns").addEventListener("click", e=>{
   const b=e.target.closest("button"); if(!b || b.disabled || !drillCur) return;
-  const f = drillCur.seat==="sb"? drillSol.sb[drillCur.idx] : drillSol.bb[drillCur.idx];
-  const act = drillCur.seat==="sb"? "jams" : "calls";
   const hand = className(CLASSES[drillCur.idx]);
   const d=drillStats();
   let good, verdict;
+  if(drillCur.seat==="open"){
+    const ev=drillCur.ev;
+    const evTxt=(ev>=0?"+":"")+ev.toFixed(2)+"bb";
+    if(Math.abs(ev)<0.2){
+      good=true;
+      verdict='<span style="color:var(--gold);font-weight:700">Razor thin.</span> Jamming '+hand+' here is worth '+evTxt+' — close enough that either answer is fine.';
+    } else {
+      const right = ev>0? "jam":"fold";
+      good = b.dataset.a===right;
+      verdict = (good? '<span style="color:var(--green);font-weight:700">Correct.</span> '
+                     : '<span style="color:var(--red);font-weight:700">Wrong.</span> ')
+        + "Jamming "+hand+" with "+drillCur.behind+" behind is worth "+evTxt+" — "+(ev>0?"a jam.":"a fold.");
+    }
+  } else {
+  const f = drillCur.seat==="sb"? drillSol.sb[drillCur.idx] : drillSol.bb[drillCur.idx];
+  const act = drillCur.seat==="sb"? "jams" : "calls";
   if(f>0.35 && f<0.65){
     good=true;
     verdict='<span style="color:var(--gold);font-weight:700">Mixed spot.</span> Equilibrium '+act+" "+hand+" "+(f*100).toFixed(0)+"% of the time here — either answer is defensible.";
@@ -1963,6 +1999,7 @@ $("drillAns").addEventListener("click", e=>{
     verdict = (good? '<span style="color:var(--green);font-weight:700">Correct.</span> '
                    : '<span style="color:var(--red);font-weight:700">Wrong.</span> ')
       + "Equilibrium "+act+" "+hand+" "+(f*100).toFixed(0)+"% at "+drillCur.stack+"bb"+drillCur.anteTxt+".";
+  }
   }
   d.n++; if(good){ d.correct++; d.streak++; if(d.streak>d.best) d.best=d.streak; } else d.streak=0;
   d.recent=d.recent||[]; d.recent.push(good?1:0); if(d.recent.length>50) d.recent.shift();
@@ -2098,8 +2135,6 @@ input.addEventListener("keydown", e=>{ if(e.key==="Enter") ask(input.value); });
 "use strict";
 /* ================= EXCEL REPORT ================= */
 (function(){
-const btn = document.getElementById("xlReport");
-if(!btn) return;
 
 function group(ss,key){ const m={}; ss.forEach(s=>{ const k=key(s)||"—"; (m[k]=m[k]||[]).push(s); }); return m; }
 function agg(list){
@@ -2309,7 +2344,9 @@ function buildWorkbook(ExcelJS, obs, images){
 
 async function makeReport(){
   if(!S.sessions.length){ toast("Log some sessions first — nothing to report yet."); return; }
-  btn.disabled=true; const old=btn.textContent; btn.textContent="Building report…";
+  const btn = document.getElementById("xlReport");
+  const vEl = btn? btn.querySelector(".v") : null;
+  if(btn){ btn.style.pointerEvents="none"; if(vEl) vEl.textContent="Building…"; }
   try{
     if(!window.ExcelJS) await new Promise((res,rej)=>{ const t=document.createElement("script");
       t.src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
@@ -2335,9 +2372,13 @@ async function makeReport(){
     setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },4000);
     toast("Report downloaded — "+S.sessions.length+" sessions analysed.");
   }catch(err){ toast(err.message||"Report failed — try again."); }
-  finally{ btn.disabled=false; btn.textContent=old; }
+  finally{ if(btn){ btn.style.pointerEvents=""; if(vEl) vEl.innerHTML="Download &#8595;"; } }
 }
-btn.addEventListener("click", makeReport);
+let busy=false;
+document.addEventListener("click", async e=>{
+  if(!e.target.closest("#xlReport") || busy) return;
+  busy=true; try{ await makeReport(); } finally{ busy=false; }
+});
 })();
 
 </script>
