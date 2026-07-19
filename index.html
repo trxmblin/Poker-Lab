@@ -749,7 +749,10 @@ function renderDash(){
     ["Hours played", t.hrs? t.hrs.toFixed(1):"—", ""],
     ["Invested", t.n? fmt$(t.cost):"—", ""],
     ["Best session", t.best!==null? fmt$(t.best):"—", "pos"],
-    ["Worst session", t.worst!==null? fmt$(t.worst):"—", "neg"]
+    dashFilterVal==="all"
+      ? (function(){ const roll=(+S.bankroll.start||0)+(+S.bankroll.dep||0)-(+S.bankroll.wd||0)+t.net;
+          return ["Current bankroll", fmt$(roll), roll>0?"gold":roll<0?"neg":""]; })()
+      : ["Worst session", t.worst!==null? fmt$(t.worst):"—", "neg"]
   ];
   const cut = new Date(); cut.setMonth(cut.getMonth()-3);
   const cutIso = cut.toISOString().slice(0,10);
