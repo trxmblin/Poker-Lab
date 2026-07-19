@@ -265,6 +265,12 @@ label.tdone input{width:auto;accent-color:var(--gold)}
       <div class="note">Net profit from your session log is added automatically. Keep the poker roll fully separate from living expenses.</div>
       <div class="statusline" id="b_current"></div>
       <div class="statusline" id="b_status"></div>
+      <div style="border-top:1px solid var(--line);margin:18px 0 2px"></div>
+      <h2 style="margin-top:14px">Where the money sits</h2>
+      <label>Online poker account balance ($)</label><input type="number" id="b_online" min="0" step="1" placeholder="0">
+      <label>Cash / bank bankroll balance ($)</label><input type="number" id="b_cash" min="0" step="1" placeholder="0">
+      <div class="statusline" id="b_declared"></div>
+      <div class="note" id="b_reconcile" style="margin-top:4px"></div>
     </div>
     <div class="panel">
       <h2>The rules</h2>
@@ -911,9 +917,13 @@ function download(name, content, type){
 }
 
 /* ---------- bankroll ---------- */
-["b_start","b_dep","b_wd","b_risk"].forEach(id=>{
+["b_start","b_dep","b_wd","b_risk","b_online","b_cash"].forEach(id=>{
   $(id).addEventListener("input", ()=>{
-    S.bankroll = { start:+$("b_start").value||0, dep:+$("b_dep").value||0, wd:+$("b_wd").value||0, risk:+$("b_risk").value||1 };
+    const prev = S.bankroll||{};
+    S.bankroll = { start:+$("b_start").value||0, dep:+$("b_dep").value||0, wd:+$("b_wd").value||0, risk:+$("b_risk").value||1,
+      online: $("b_online").value===""? null : (+$("b_online").value||0),
+      cash: $("b_cash").value===""? null : (+$("b_cash").value||0),
+      balAt: (id==="b_online"||id==="b_cash")? Date.now() : (prev.balAt||null) };
     save(); renderBankroll();
   });
 });
@@ -936,6 +946,22 @@ function renderBankroll(){
   else if(bi>=50){ statusTxt="Recreational minimum (50–99 buy-ins). Fine for hobby stakes, thin for income plans."; color="var(--gold)"; }
   else { statusTxt="Under-rolled for your average stake. Move down until the roll catches up."; color="var(--red)"; }
   $("b_status").innerHTML = `<span style="color:${color}">${statusTxt}</span>`;
+  if(document.activeElement!==$("b_online")) $("b_online").value = S.bankroll.online==null? "" : S.bankroll.online;
+  if(document.activeElement!==$("b_cash")) $("b_cash").value = S.bankroll.cash==null? "" : S.bankroll.cash;
+  const hasBal = S.bankroll.online!=null || S.bankroll.cash!=null;
+  if(hasBal){
+    const o = +S.bankroll.online||0, c = +S.bankroll.cash||0, decl = o+c;
+    const when = S.bankroll.balAt? " · updated "+new Date(S.bankroll.balAt).toLocaleDateString() : "";
+    $("b_declared").innerHTML = 'Counted money: <span style="color:var(--gold);font-size:20px">'+fmt$(decl)+'</span>'
+      +'<span style="color:var(--dim);font-weight:400;font-size:12px"> (online '+fmt$(o)+' · cash '+fmt$(c)+when+')</span>';
+    const diff = decl - cur;
+    $("b_reconcile").innerHTML = Math.abs(diff)<1
+      ? '<span style="color:var(--green)">Matches the computed roll — your log is airtight.</span>'
+      : 'Your counted money is <b style="color:'+(diff>0?'var(--green)':'var(--red)')+'">'+fmt$(Math.abs(diff))+' '+(diff>0?'more':'less')+'</b> than the roll computed from your log ('+fmt$(cur)+'). Differences usually mean unlogged sessions, expenses paid from the roll, or bonuses/rakeback.';
+  } else {
+    $("b_declared").innerHTML = "";
+    $("b_reconcile").textContent = "Enter your balances and the app reconciles them against the roll computed from your session log.";
+  }
   $("b_calcs").innerHTML = `
     <div class="statusline">Max single buy-in (${risk}% rule): <b style="color:var(--gold)">${fmt$2(cur*risk/100)}</b></div>
     <div class="statusline">Buy-ins in bankroll at your avg cost${t.avgCost? " ("+fmt$(t.avgCost)+")":""}: <b style="color:var(--gold)">${bi!==null? bi.toFixed(1):"—"}</b></div>`;
