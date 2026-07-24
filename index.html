@@ -205,7 +205,7 @@ label.tdone input{width:auto;accent-color:var(--gold)}
     </div>
     <div style="overflow-x:auto">
     <table id="sessTable">
-      <thead><tr><th>Date</th><th>Venue</th><th>Format</th><th class="num">Cost</th><th class="num">Cash out</th><th class="num">Net</th><th>ITM</th><th class="num">Finish</th><th class="num">$/hr</th><th></th></tr></thead>
+      <thead><tr><th>Date</th><th>Venue</th><th>Format</th><th class="num">Cost</th><th class="num">Cash out</th><th class="num">Net</th><th>Profit</th><th class="num">Finish</th><th class="num">$/hr</th><th></th></tr></thead>
       <tbody id="sessBody"></tbody>
     </table>
     </div>
@@ -673,7 +673,7 @@ const pct = n => (n*100).toFixed(1) + "%";
 function derive(x){
   const cost = (+x.buyin||0) + (+x.rebuys||0);
   const net = (+x.cashout||0) - cost;
-  return { cost, net, itm: (+x.cashout||0) > 0, hourly: (+x.hours||0) > 0 ? net/(+x.hours) : null };
+  return { cost, net, itm: net > 0, hourly: (+x.hours||0) > 0 ? net/(+x.hours) : null };
 }
 function sorted(){ return [...S.sessions].sort((a,b)=> a.date<b.date?-1 : a.date>b.date?1 : (a.id-b.id)); }
 function totals(list){
@@ -749,7 +749,7 @@ function renderDash(){
     ["Sessions", t.n, ""],
     ["Net profit", t.n? fmt$(t.net):"—", t.net>0?"pos":t.net<0?"neg":""],
     ["ROI", t.roi!==null? pct(t.roi):"—", t.roi>0?"pos":t.roi<0?"neg":""],
-    ["ITM rate", t.itmRate!==null? pct(t.itmRate):"—", "gold"],
+    ["Profit rate", t.itmRate!==null? pct(t.itmRate):"—", "gold"],
     ["Wins (1st)", t.n? t.wins:"—", "gold"],
     ["Hourly", t.hourly!==null? fmt$2(t.hourly):"—", t.hourly>0?"pos":t.hourly<0?"neg":""],
     ["Hours played", t.hrs? t.hrs.toFixed(1):"—", ""],
@@ -851,7 +851,7 @@ function renderSessions(){
       <td>${s.date}</td><td>${esc(s.venue)}</td><td>${esc(s.format)}</td>
       <td class="num">${fmt$(d.cost)}</td><td class="num">${fmt$(+s.cashout||0)}</td>
       <td class="num ${d.net>=0?'pos':'neg'}">${fmt$(d.net)}</td>
-      <td><span class="pill ${d.itm?'y':'n'}">${d.itm?'ITM':'—'}</span></td>
+      <td><span class="pill ${d.itm?'y':'n'}">${d.itm?'Win':'—'}</span></td>
       <td class="num">${s.finish? s.finish + (s.field? "/"+s.field : "") : ""}</td>
       <td class="num">${d.hourly!==null? fmt$2(d.hourly):""}</td>
       <td><div class="rowbtns">
@@ -884,7 +884,7 @@ function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&
 
 /* ---------- export / import ---------- */
 $("exportCsv").addEventListener("click", ()=>{
-  const head = "Date,Venue,Format,Buy-in,Rebuys,Total Cost,Cash Out,Net,ITM,Field,Finish,Hours,$/hr,Notes";
+  const head = "Date,Venue,Format,Buy-in,Rebuys,Total Cost,Cash Out,Net,Profit,Field,Finish,Hours,$/hr,Notes";
   const rows = sorted().map(s=>{
     const d = derive(s);
     const q = v => '"'+String(v==null?"":v).replace(/"/g,'""')+'"';
@@ -2056,7 +2056,7 @@ const KB = [
  {k:["ev","expected value","+ev","-ev","chip ev","chipev","$ev"],a:"<b>EV (expected value)</b> is the average result of a decision if repeated forever. +EV makes money long-run, -EV loses it. <b>Chip EV</b> counts chips; <b>$EV</b> counts real money after ICM. A play can be +chipEV but -$EV near pay jumps — that's why marginal calls near the bubble become folds."},
  {k:["bubble","money bubble","bubble play"],a:"The <b>bubble</b> is when the next player out gets nothing and everyone after is paid. ICM pressure peaks here. Big stacks should attack (medium stacks can't fight back without risking the min-cash), medium stacks avoid covered confrontations, micro stacks often just fold into the money."},
  {k:["bubble factor","risk premium"],a:"<b>Bubble factor</b> measures how much more a lost chip costs than a won chip gains. At a normal final table it pushes required calling equity from 50% to 55–60%+. Highest for medium stacks facing bigger stacks. It's why 'I had the odds in chips' can still be a bad call."},
- {k:["itm","in the money","cash","min-cash","min cash"],a:"<b>ITM (In The Money)</b> means finishing high enough to get paid. Your ITM rate is on the Dashboard — for live MTTs, roughly 15–20% is typical. A high ITM% with low ROI can mean playing too tight for min-cashes instead of playing for wins, where the real money is."},
+ {k:["profit rate","profit","itm","in the money","cash","min-cash","min cash","winning sessions"],a:"<b>Profit rate</b> is the share of your sessions that booked a profit (net above zero), shown on the Dashboard. It replaces plain ITM because cashing isn't the same as profiting — in a PKO you can min-cash and still lose money if your knockouts were light. Don't chase a high profit rate for its own sake: a few big winners can carry many small losers. Net profit and ROI are what matter."},
  {k:["roi","return on investment"],a:"<b>ROI</b> = net profit ÷ total buy-ins. If you've invested $2,000 and profited $400, ROI is 20%. Good live MTT regs run 20–50%+ in soft fields, but you need hundreds of tournaments before the number means much — variance dominates small samples."},
  {k:["hourly","hourly rate","$/hr","per hour"],a:"<b>Hourly rate</b> = net profit ÷ hours played, on the Dashboard. It's the number that decides whether poker can be income: compare it honestly to what your time earns elsewhere. It stabilizes even more slowly than ROI, so don't trust it before ~100 sessions."},
  {k:["variance","downswing","swings","run bad","running bad"],a:"<b>Variance</b> is the gap between results and expectation. In MTTs it's brutal: even great players have 50+ tournament stretches with no big cash. Defenses: proper bankroll (see the Bankroll tab), moving down in stakes during downswings, and judging yourself on decision quality, not results."},
@@ -2080,10 +2080,10 @@ const KB = [
  {k:["mixed strategy","frequency","mixed"],a:"A <b>mixed strategy</b> plays the same hand differently at some frequency — e.g. jam A5o 60%, fold 40%. In solver grids, partially-shaded cells are mixed. In practice: pure strategies lose almost nothing, so treat 40–60% hands as 'either is fine' and pick based on reads."},
  {k:["dominated","domination","coin flip","flip","race"],a:"A hand is <b>dominated</b> when it shares a card with a better hand (AQ vs AK: ~27% equity). A <b>coin flip</b> is pair vs two overcards (QQ vs AKs ≈ 54/46). Short-stacked you can't avoid flips — winning MTTs means taking them with fold equity on your side."},
  {k:["rebuy","re-buy","add-on","addon","re-entry","reentry"],a:"A <b>rebuy/re-entry</b> buys a fresh stack after busting (during the rebuy period); an <b>add-on</b> is an optional extra stack purchase, usually at first break. Log them in the session form — they're part of your true cost, and the tracker counts them in every stat."},
- {k:["log a session","log session","add session","how do i log","record a session"],a:"<b>Logging a session</b>: Sessions tab → fill the form (date and buy-in minimum) → Save. Total cost, net, ITM and $/hr compute automatically. Edit or delete any row later. Do it the same night while the details are fresh, and put one lesson in Notes."},
+ {k:["log a session","log session","add session","how do i log","record a session"],a:"<b>Logging a session</b>: Sessions tab → fill the form (date and buy-in minimum) → Save. Total cost, net, profit and $/hr compute automatically. Edit or delete any row later. Do it the same night while the details are fresh, and put one lesson in Notes."},
  {k:["backup","export","restore","csv","save my data","transfer","move data","another computer"],a:"<b>Backing up</b>: Sessions tab → 'Backup data' downloads everything as a JSON file; 'Restore backup' loads it on any computer. 'Export CSV' gives a spreadsheet-friendly version. Do this regularly — your data lives in this browser and clearing browser data erases it."},
  {k:["where is my data","data stored","localstorage","storage","lose my data","private"],a:"Your data lives in <b>this browser's local storage</b> on your machine — nothing is uploaded anywhere, fully private. The risks: clearing browser data, or switching browsers/computers, loses it. Defense: hit 'Backup data' in the Sessions tab regularly and keep the file safe."},
- {k:["dashboard","stats","best session","worst session","invested"],a:"The <b>Dashboard</b> computes everything from your session log: net profit, ROI, ITM rate, hourly, wins, best/worst sessions, plus your cumulative profit curve and last 15 sessions. Nothing to enter — it updates the moment you log. Ignore it emotionally for the first 25 sessions; that's noise territory."},
+ {k:["dashboard","stats","best session","worst session","invested"],a:"The <b>Dashboard</b> computes everything from your session log: net profit, ROI, profit rate, hourly, wins, best/worst sessions, plus your cumulative profit curve and last 15 sessions. Nothing to enter — it updates the moment you log. Ignore it emotionally for the first 25 sessions; that's noise territory."},
  {k:["gates","milestone","milestones","when can i move up","go pro","professional"],a:"The <b>milestone gates</b> (Study tab) are go/no-go checks on the road to income: Gate 1 = 25 sessions + positive profit + Stage 1 topics studied + 80% drill accuracy over your last 50 answers. Gate 2 adds 50 sessions, 20% ROI, 100 buy-ins and Stage 2 topics. Gate 3 adds 100 sessions, 150 buy-ins, an hourly you'd accept and Stage 3 topics. Pass one before acting on the next."},
  {k:["drill","trainer","practice","reps","deal a spot"],a:"The <b>Drill</b> (Solver tab) deals random short-stack spots and grades your jam/fold answer against the Nash solution. Set antes on, off, or mixed. Your accuracy over the last 50 answers feeds Gate 1 — aim for 80%+."},
  {k:["flashcards","flash cards","spaced repetition","cards due"],a:"<b>Flashcards</b> (Study tab) hold the syllabus's hard facts. Grade yourself Again / Good / Easy and each card returns on its own schedule — tomorrow if shaky, weeks later once you know it cold. A few minutes daily keeps the queue small."},
@@ -2206,9 +2206,9 @@ function observations(){
     else out.push("Session length: your hourly holds up in longer sessions ("+fmt$2(la.hourly)+"/hr past 5 hours vs "+fmt$2(sa.hourly)+"/hr in shorter ones), so stamina isn't currently a leak.");
   }
   const mtts = ss.filter(s=>s.field);
-  if(mtts.length>=5){
-    const ma=agg(mtts); const rate=ma.itm/ma.mtt;
-    out.push("Tournaments: ITM "+pct(rate)+" across "+ma.mtt+" MTTs (typical fields pay ~15%). "+(rate>0.22?"A high cash rate with modest ROI usually means playing too tight near the bubble — cashing often but rarely deep. Deep runs, not min-cashes, are where MTT profit lives.":rate<0.10?"A low cash rate isn't automatically bad if your finishes are top-heavy, but check the Hand Review log for repeated early bust-out patterns.":"That's a healthy range — the goal is converting those cashes into deeper runs."));
+  if(ss.length>=5){
+    const rate=ss.filter(s=>derive(s).net>0).length/ss.length;
+    out.push("Profit rate: "+pct(rate)+" of your "+ss.length+" sessions booked a profit. "+(rate>0.5?"More than half in the black is a genuinely good result — the job now is protecting it with the bankroll rules.":rate>0.35?"Below half is completely normal for MTT-heavy volume, where a few deep runs carry the profit. Judge yourself on net and ROI, not this rate.":"A low share of winning sessions is fine IF your winners are big enough to carry the losers — check net profit and ROI are positive. In PKOs especially, cashing without profit is common when knockouts are light."));
   }
   const dd = maxDrawdown(nets);
   const roll = (+((S.bankroll||{}).start)||0) + (+((S.bankroll||{}).dep)||0) - (+((S.bankroll||{}).wd)||0) + t.net;
@@ -2286,7 +2286,7 @@ function buildWorkbook(ExcelJS, obs, images){
   const cw = wb.addWorksheet("Charts");
   const bw = wb.addWorksheet("Breakdowns");
   const sh = wb.addWorksheet("Sessions");
-  head(sh,1,["Date","Venue","Format","Buy-in ($)","Rebuys ($)","Cash out ($)","Field","Finish","Hours","Net ($)","Cumulative ($)","$/hr","ITM","Month"]);
+  head(sh,1,["Date","Venue","Format","Buy-in ($)","Rebuys ($)","Cash out ($)","Field","Finish","Hours","Net ($)","Cumulative ($)","$/hr","Profit","Month"]);
   let runCum=0;
   ss.forEach((s,idx)=>{ const r=idx+2, row=sh.getRow(r);
     const d=derive(s); runCum+=d.net;
@@ -2294,7 +2294,7 @@ function buildWorkbook(ExcelJS, obs, images){
     row.getCell(10).value={formula:"F"+r+"-D"+r+"-E"+r, result:d.net};
     row.getCell(11).value={formula: r===2? "J2" : "K"+(r-1)+"+J"+r, result:runCum};
     row.getCell(12).value={formula:"IF(I"+r+">0,J"+r+"/I"+r+",0)", result:+s.hours>0? d.net/(+s.hours):0};
-    row.getCell(13).value={formula:'IF(ISNUMBER(G'+r+'),IF(F'+r+'>0,1,0),"")', result: s.field? ((+s.cashout||0)>0?1:0) : ""};
+    row.getCell(13).value={formula:'IF(J'+r+'>0,1,0)', result: d.net>0?1:0};
     row.getCell(14).value={formula:"LEFT(A"+r+",7)", result:(s.date||"").slice(0,7)};
     row.eachCell(c=>c.font={name:"Arial",size:10});
     [4,5,6,10,11,12].forEach(ci=>row.getCell(ci).numFmt=money);
@@ -2307,7 +2307,8 @@ function buildWorkbook(ExcelJS, obs, images){
   sm.getCell("A2").font={name:"Arial",size:9,italic:true,color:{argb:"FF888888"}};
   head(sm,4,["Metric","Value"]);
   const t=totals();
-  const mttList=ss.filter(s=>s.field), mttItm=mttList.filter(s=>(+s.cashout||0)>0).length;
+  const mttList=ss.filter(s=>s.field);
+  const profitCount=ss.filter(s=>derive(s).net>0).length;
   const stats=[
     ["Sessions","COUNTA(Sessions!A2:A"+n+")","0", t.n],
     ["Total invested","SUM(Sessions!D2:E"+n+")",money, t.cost],
@@ -2317,7 +2318,7 @@ function buildWorkbook(ExcelJS, obs, images){
     ["Hours played","SUM(Sessions!I2:I"+n+")","0.0", t.hrs],
     ["Hourly rate","IF(SUM(Sessions!I2:I"+n+")>0,SUM(Sessions!J2:J"+n+")/SUM(Sessions!I2:I"+n+"),0)",'$#,##0.00;($#,##0.00)', t.hourly||0],
     ["Tournaments","COUNT(Sessions!G2:G"+n+")","0", mttList.length],
-    ["ITM rate (MTT)","IF(COUNT(Sessions!G2:G"+n+")>0,SUM(Sessions!M2:M"+n+")/COUNT(Sessions!G2:G"+n+"),0)","0.0%", mttList.length? mttItm/mttList.length:0],
+    ["Profit rate","IF(COUNTA(Sessions!A2:A"+n+")>0,SUM(Sessions!M2:M"+n+")/COUNTA(Sessions!A2:A"+n+"),0)","0.0%", t.n? profitCount/t.n:0],
     ["Wins (1st)","COUNTIF(Sessions!H2:H"+n+",1)","0", ss.filter(s=>+s.finish===1).length],
     ["Best session","MAX(Sessions!J2:J"+n+")",money, t.best||0],
     ["Worst session","MIN(Sessions!J2:J"+n+")",money, t.worst||0]
